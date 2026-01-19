@@ -1,0 +1,4 @@
+wims
+src/*.o
+.gdb_history
+peda-session-wims.txt
