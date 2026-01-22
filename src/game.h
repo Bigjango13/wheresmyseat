@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <unordered_map>
 
 #define SCREEN_WIDTH 800
 #define SCREEN_HEIGHT 608
@@ -57,6 +58,7 @@ enum class Attributes {
 enum class Constraints {
     Aisle,
     Row,
+    Seat,
 
     StageLeft,
     StageRight,
@@ -85,7 +87,10 @@ enum class Constraints {
     Parent,
     Baby,
 
-    Wheelchair
+    Wheelchair,
+
+    Group,
+    Friends,
 };
 
 class Viewer;
@@ -96,15 +101,16 @@ struct Limit {
 };
 
 enum Skins {
-    NormalSkin = 0,
-    ShortSkin = 1,
-    TallSkin = 2,
-    BabySkin = 3,
+    KeySkin = 0,
+    NormalSkin,
+    ShortSkin,
+    TallSkin,
+    BabySkin,
 
-    ChessRookSkin = 4,
-    ChessKnightSkin = 5,
-    ChessBishopSkin = 6,
-    ChessQueenSkin = 7,
+    ChessRookSkin,
+    ChessKnightSkin,
+    ChessBishopSkin,
+    ChessQueenSkin
 };
 
 class Game;
@@ -116,13 +122,16 @@ public:
     // If either is negative, they are off-board cords
     int x, y;
 
-    int skin = 0;
+    int skin = Skins::NormalSkin;
     int timer = 0;
     int color = 0;
     bool happy = false;
     std::string name = "Evil Bob";
     std::vector<Attributes> attrs = {};
     std::vector<Limit> limits = {};
+    bool hasAttr(Attributes attribute);
+    int getLimit(Constraints constraint);
+    Limit *getLimitRef(Constraints constraint);
 
     void resetPos() {
         x = -((id % 3) + 1);
@@ -176,6 +185,8 @@ public:
     bool level_complete = false;
     int level_id = 0;
     int max_level_id = 0;
+    int debug_state = 0;
+    void setupLinks();
     void setupLevel();
 
     bool hasInfo();
@@ -188,7 +199,7 @@ public:
     Viewer *getAt(int x, int y);
     Viewer *getViewer(int id);
     std::vector<Viewer*> viewers = {};
-
+    std::unordered_map<int,std::vector<int>> links = {};
     std::vector<std::pair<int, int>> closed_sections = {};
     std::vector<std::vector<int>> saved_pos = {};
     bool chairEnabled(int id);

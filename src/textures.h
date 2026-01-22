@@ -1,5 +1,6 @@
 // Viewers
 TEXTURE_X(duck);
+TEXTURE_X(select);
 
 // Chair
 TEXTURE_X(wheelchair);
@@ -15,3 +16,4 @@ TEXTURE_X(next);
 
 // Art
 TEXTURE_X(bg);
+TEXTURE_X(carpet);
