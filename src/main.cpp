@@ -10,6 +10,8 @@
 
 #define DEBUG_MODE
 #define DEBUG_KEY "_KEY"
+#define DEBUG_LEVEL 16
+#define MAX_LEVEL 20
 
 // Rendering
 constexpr int wd16 = SCREEN_WIDTH / SCALE, hd16 = SCREEN_HEIGHT / SCALE;
@@ -25,8 +27,6 @@ constexpr int wd16 = SCREEN_WIDTH / SCALE, hd16 = SCREEN_HEIGHT / SCALE;
 #define PREV_BUTTON_X 177
 #define NEXT_BUTTON_POS {NEXT_BUTTON_X, BOTTOM_Y, 64, 32}
 #define PREV_BUTTON_POS {PREV_BUTTON_X, BOTTOM_Y, 64, 32}
-// Level Macros
-#define MAX_LEVEL 20
 // Useful macros
 #define IMPOSSIBLE \
     {puts("ERROR: We've reached an unreachable state." \
@@ -182,39 +182,46 @@ std::string getStrForLim(UNUSED Game *game, Viewer *viewer, Limit lim, std::stri
         // Love/hate/date
         case Constraints::Date:
             return color +
-                "I'm on a date with " C_CPURPLE
+                "I'm on a date with " C_CGREEN
                 + viewer->game->viewers[lim.data]->name
                 + color + ":" C_SX "\n";
         case Constraints::Love:
             return color +
-                "I want to sit with " C_CPURPLE
+                "I want to sit with " C_CGREEN
                 + viewer->game->viewers[lim.data]->name
                 + color + ":" C_SX "\n";
         case Constraints::Prox:
             return color +
-                "I want to sit near " C_CPURPLE
+                "I want to sit near " C_CGREEN
                 + viewer->game->viewers[lim.data]->name
                 + color + ":" C_SALL "\n";
         case Constraints::Hate:
             return color
-                + "Don't put me near " C_CPURPLE
+                + "Don't put me near " C_CRED
                 + viewer->game->viewers[lim.data]->name
                 + color + ":" C_SALL "\n";
+        case Constraints::See:
+            return color +
+                "I want to see " C_CGREEN
+                + viewer->game->viewers[lim.data]->name
+                + color + ":" C_SSEE "\n";
 
         case Constraints::Group:
             return color + "I'm here with a " C_CPURPLE "group:" C_SX "\n";
 
         case Constraints::Friends:
-            return color + "I love my friends " C_CRED "{\xA0"
+            return color + "I love my " C_CPURPLE "friends {\xA0"
                 + color + " :" C_SXY "\n";
 
-        // Intro/lonely/extro
-        case Constraints::Introverted:
+        // Alone/lonely/extro/intro
+        case Constraints::Alone:
             return color + "I want to be alone:" C_SALL "\n";
         case Constraints::Lonely:
             return color + "I could use a friend:" C_SALL "\n";
         case Constraints::Extroverted:
             return color + "I'm pretty extroverted:" C_SALL "\n";
+        case Constraints::Introverted:
+            return color + "I'm pretty introverted:" C_SALL "\n";
 
         // Chess/Checkers
         case Constraints::ChessHater:
@@ -224,7 +231,7 @@ std::string getStrForLim(UNUSED Game *game, Viewer *viewer, Limit lim, std::stri
         case Constraints::Chess:
             return color + "I'm a chess piece!" C_SCHESS "\n";
         case Constraints::ChessProt:
-            return C_CPURPLE
+            return C_CGREEN
                 + viewer->game->viewers[lim.data]->name
                 + color + " will protect me"
                 + color + ":" C_SALL "\n";
@@ -255,10 +262,14 @@ std::string getStrForLim(UNUSED Game *game, Viewer *viewer, Limit lim, std::stri
                 + std::to_string(lim.data) + " children:" C_SSEE "\n";
 
         case Constraints::Baby:
-            if (lim.data == -1) return color + "I'm a cute, unattended " C_CPURPLE "baby!\n";
+            if (lim.data == -1) return color +
+                "I'm a cute, unattended " C_CPURPLE "baby" + color + "!\n";
             return color
                 + "My parent is " C_CPURPLE
                 + viewer->game->viewers[lim.data]->name + "\n";
+
+        case Constraints::Misopedia:
+            return color + "I dislike " C_CPURPLE "babies:" C_SALL "\n";
     }
     IMPOSSIBLE
 }
@@ -317,7 +328,7 @@ std::vector<Viewer*> get_checks(Viewer *viewer, Checks checks) {
 std::vector<Viewer*> check_for_constraints(Viewer *viewer, Checks checks, Constraints constraint) {
     std::vector<Viewer*> viewers = get_checks(viewer, checks), ret = {};
     for (Viewer *v : viewers) {
-        if (v->getLimit(constraint) != -1) {
+        if (v->getLimitRef(constraint) != NULL) {
             ret.push_back(v);
         }
     }
@@ -424,7 +435,7 @@ void check_for_lim_bin_data(Viewer *viewer, Checks checks, Limit lim, std::vecto
     std::vector<Viewer*> viewers = get_checks(viewer, checks);
     for (Viewer *v : viewers) {
         int val = v->getLimit(lim.constraint);
-        if (val != -1 && (val & lim.data) != -1) {
+        if (val != -1 && (val & lim.data) != 0) {
             ret.push_back(v->id);
         }
     }
@@ -463,12 +474,14 @@ bool Limit::check(Viewer *viewer, std::vector<Viewer*> &viewers) {
             return check_for_person(viewer, Checks::Xside, data).size() != 0;
         case Constraints::Prox:
             return check_for_person(viewer, Checks::All, data).size() != 0;
+        case Constraints::See:
+            return check_for_person(viewer, Checks::See, data).size() != 0;
         case Constraints::Hate:
             viewers = check_for_person(viewer, Checks::All, data);
             return viewers.size() == 0;
 
         // Intro/lonely/extro
-        case Constraints::Introverted:
+        case Constraints::Alone:
             viewers = get_checks(viewer, Checks::All);
             return viewers.size() < 1;
         case Constraints::Lonely:
@@ -480,6 +493,24 @@ bool Limit::check(Viewer *viewer, std::vector<Viewer*> &viewers) {
             return false;
         case Constraints::Extroverted:
             return get_checks(viewer, Checks::All).size() > 1;
+        case Constraints::Introverted:
+            for (Viewer *v : get_checks(viewer, Checks::All)) {
+                bool push = true;
+                for (Limit lim : viewer->limits) {
+                    // Same group?
+                    // Same friend group?
+                    // Date/Love/Prox/See
+                    if (
+                        (lim.constraint == Constraints::Date
+                        || lim.constraint == Constraints::Love
+                        || lim.constraint == Constraints::Prox
+                        || lim.constraint == Constraints::See
+                        ) && lim.data == v->id
+                    ) push = false;
+                }
+                if (push) viewers.push_back(v);
+            }
+            return viewers.size() < 1;
 
         // Baby
         case Constraints::Baby:
@@ -499,6 +530,11 @@ bool Limit::check(Viewer *viewer, std::vector<Viewer*> &viewers) {
                 Checks::See,
                 Limit{Constraints::Baby, viewer->id}
             ).size() == data;
+
+        // Baby hater
+        case Constraints::Misopedia:
+            viewers = check_for_constraints(viewer, Checks::All, Constraints::Baby);
+            return viewers.size() == 0;
 
         // Nose
         case Constraints::GoodNose:
@@ -642,7 +678,11 @@ constexpr inline int getViewerY(int x, int y) {
     if (x < 0 || y < 0) return (abs(y)-1)*36 + 12;
     return getChairY(y) + 6*2;
 }
-Viewer::Viewer(Game *game, int color, std::string name) : game(game), color(color), name(name) {
+Viewer::Viewer(
+    Game *game, int color, std::string name,
+    std::vector<Attributes> attrs, std::vector<Limit> limits,
+    Skins dskin
+) : game(game), color(color), name(name), attrs(attrs), limits(limits) {
     id = game->viewers.size();
     level = game->level_id;
     resetPos();
@@ -650,6 +690,7 @@ Viewer::Viewer(Game *game, int color, std::string name) : game(game), color(colo
         skin = Skins::KeySkin;
         return;
     }
+    setSkin(dskin);
     if (game->saved_pos[level].size() == id) {
         game->saved_pos[level].push_back(-1);
     } else {
@@ -768,7 +809,15 @@ bool Viewer::check_valid(std::vector<Viewer*> &viewers) {
 static int chaircolor[8 * 9] = {0};
 void update_chairs_shades(Game *game, std::vector<Viewer*> &redviewers) {
     for (int i = 0; i < 8*9; i++) chaircolor[i] = 0;
-    if (game->touching == NULL) return;
+    if (game->touching == NULL) {
+        if (!mouse_touching(NEXT_BUTTON_POS)) return;
+        // Red tint unhappy seats
+        for (Viewer *v : game->viewers) {
+            if (v->happy || v->x < 0 || v->y < 0) continue;
+            chaircolor[v->y * 8 + v->x] = 2;
+        }
+        return;
+    }
     std::vector<Viewer*> _v = {};
     Limit *lim = NULL;
     /*
@@ -920,6 +969,17 @@ int getShiftSeat(Viewer *v) {
     return v->getLimit(Constraints::Seat);
 }
 
+inline bool can_proceed(Game *game) {
+    return (
+            // Level finished
+            game->level_complete
+            // Level finished previously
+            || game->level_id < game->max_level_id
+            // Debug mode is enabled
+            || game->debug_state == -1
+        ) && game->level_id < MAX_LEVEL - 1;
+}
+
 // This code is pretty hairy, but it does work!
 void Game::tick() {
     bool needs_update = false;
@@ -940,11 +1000,7 @@ void Game::tick() {
             // Prev button
             level_id--;
             setupLevel();
-        } else if (
-            (level_complete || level_id < max_level_id || debug_state == -1)
-            && mouse_touching(NEXT_BUTTON_POS)
-            && level_id < MAX_LEVEL - 1
-        ) {
+        } else if (can_proceed(this) && mouse_touching(NEXT_BUTTON_POS)) {
             // Next button
             level_id++;
             if (level_complete)
@@ -1035,7 +1091,10 @@ void Game::render() {
     // Debug carpet
     if (debug_state != 0 && level_id == 1) {
         dstRect = {709, 482, 44, 44};
-        RENDER_G(Asset::carpet, NULL, &dstRect);
+#ifdef DEBUG_MODE
+        if (debug_state != -1)
+#endif
+            RENDER_G(Asset::carpet, NULL, &dstRect);
     }
 
     // Chairs
@@ -1054,9 +1113,7 @@ void Game::render() {
     // Next button
     if (level_id < MAX_LEVEL - 1) {
         dstRect = NEXT_BUTTON_POS;
-        if (
-            !level_complete && level_id == max_level_id && debug_state != -1
-        ) COLOR(Asset::next, 0x474747);
+        if (!can_proceed(this)) COLOR(Asset::next, 0x474747);
         else COLOR(Asset::next, 0xFFFFFF);
         RENDER_G(Asset::next, NULL, &dstRect);
     }
@@ -1086,9 +1143,10 @@ void Game::render() {
 
     // Prev button
     dstRect = PREV_BUTTON_POS;
-    if (level_id <= 0) COLOR(Asset::next, 0x474747);
-    else COLOR(Asset::next, 0xFFFFFF);
-    SDL_RenderCopyEx(sdlrenderer, Asset::next, NULL, &dstRect, 0, NULL, SDL_FLIP_HORIZONTAL);
+    if (level_id > 0) {
+        COLOR(Asset::next, 0xFFFFFF);
+        SDL_RenderCopyEx(sdlrenderer, Asset::next, NULL, &dstRect, 0, NULL, SDL_FLIP_HORIZONTAL);
+    }
 
     // Text
     std::vector<Viewer *> redent = {};
@@ -1136,18 +1194,52 @@ void Game::render() {
     if (held != NULL) held->render();
 
     // Draw highlights
-    if (touching != NULL && links.contains(touching->id)) {
-        for (int link : links[touching->id]) {
-            if (viewers[link] == held) continue;
-            dstRect = {
-                getViewerX(viewers[link]->x, viewers[link]->y) - 2,
-                getViewerY(viewers[link]->x, viewers[link]->y) - 2,
-                18*2,
-                18*2
-            };
-            RENDER_G(Asset::select, NULL, &dstRect);
+    if (touching != NULL) {
+        if (links.contains(touching->id)) {
+            // Purple: Group, friend, child/parent
+            COLOR(Asset::select, colors[3]);
+            for (int link : links[touching->id]) {
+                if (viewers[link] == held) continue;
+                dstRect = {
+                    getViewerX(viewers[link]->x, viewers[link]->y) - 2,
+                    getViewerY(viewers[link]->x, viewers[link]->y) - 2,
+                    18*2,
+                    18*2
+                };
+                RENDER_G(Asset::select, NULL, &dstRect);
+            }
+        }
+        for (Limit &lim : touching->limits) {
+            int val = -1;
+            if (0
+                || lim.constraint == Constraints::Love
+                || lim.constraint == Constraints::Date
+                || lim.constraint == Constraints::Prox
+                || lim.constraint == Constraints::See
+                || lim.constraint == Constraints::ChessProt
+            ) {
+                // Green: Loved
+                COLOR(Asset::select, colors[2]);
+                val = lim.data;
+            }
+            if (lim.constraint == Constraints::Hate) {
+                // Red: Hated
+                COLOR(Asset::select, colors[1]);
+                val = lim.data;
+            }
+            // Render
+            if (val != -1 && viewers[val] != held) {
+                dstRect = {
+                    getViewerX(viewers[val]->x, viewers[val]->y) - 2,
+                    getViewerY(viewers[val]->x, viewers[val]->y) - 2,
+                    18*2,
+                    18*2
+                };
+                RENDER_G(Asset::select, NULL, &dstRect);
+            }
         }
     }
+
 
     // Present
     SDL_RenderPresent(sdlrenderer);
@@ -1215,8 +1307,17 @@ const char *Game::getInfo() {
                C_CPURPLE "parent\n"
                "They do come with friends though!";
     } else if (level_id == 12) {
+        return "Some " C_CPURPLE "veiwers\xA0 dislike " C_CPURPLE "babies\n"
+               "Introverted = only " C_CPURPLE "viewers\xA0 they like";
+    } else if (level_id == 13) {
+        return C_CPURPLE "Chess pieces\xA0 count as company\n";
+    } else if (level_id == 14) {
         return "While " C_CPURPLE "groups\xA0 must be in the same row\n"
-               C_CPURPLE "Friends\xA0 just need to touch";
+               C_CPURPLE "Friends\xA0 just need to touch\n";
+    } else if (level_id == 15) {
+        return "Don't worry if you get stuck\n"
+               "Take all the time you need\n"
+               "You could try all " C_CPURPLE "39,916,800\xA0 combos\n";
     } else if (level_id == MAX_LEVEL - 1) {
         // Final level
         return "Good luck!";
@@ -1236,16 +1337,6 @@ void add_link(std::unordered_map<int,std::vector<int>> &links, int key, int val)
 void Game::setupLinks() {
     links = {};
     for (size_t i = 0; i < viewers.size(); i++) {
-        // Love/date/hate/near check
-        /*for (Constraints c : {
-            Constraints::Love, Constraints::Hate,
-            Constraints::Date, Constraints::Prox
-        }) {
-            int val = viewers[i]->getLimit(c);
-            if (val != -1) {
-                add_link(links, i, val);
-            }
-        }*/
         // Baby/parent check
         int val = viewers[i]->getLimit(Constraints::Baby);
         if (val != -1) {
@@ -1288,15 +1379,22 @@ void Game::setupLinks() {
 #define CHESSR 0xE62022
 // Good people
 #define JULIA 0x1C1D1A
-#define DEE 0x002D04
+#define DEE 0x002500
 #define MAX 0xBB67FF
 #define JOE 0x4747DB
+#define LEO 0xEF3B00
 // Fake people
 #define DAVENPORT 0x404012
 #define ALICE 0xE04700
 #define ROSEMARY 0xE679A6
 #define WENDY 0x889AA4
 #define RUBY 0x8B0000
+// 10TIHAY
+#define WALTER 0xA85D12
+#define KAT 0xBE7F40
+#define BIANCA 0xCE0029
+#define PATRICK 0x63514F
+#define CAMERON 0x121F68
 // Pirates
 #define RICHARD 0x64A649
 #define SAMUEL 0xA62021
@@ -1304,7 +1402,7 @@ void Game::setupLinks() {
 #define FREDERIC 0xAB3C3C
 #define STANLEY 0xBBBBBB
 #define MABEL 0xFF0067
-#define EDITH 0xABDAD1
+#define EDITH 0x37D3B4
 #define KATE MAX
 #define ISABEL 0x00C800
 // Sailors
@@ -1313,6 +1411,8 @@ void Game::setupLinks() {
 #define JOSEPH HEBE
 // Ghosts
 #define MURGATROYD 0xE00000
+#define RUTH 0x89FB41
+
 void Game::setupLevel() {
     // Reset level
     touching = NULL;
@@ -1372,7 +1472,7 @@ void Game::setupLevel() {
         viewers[3]->attrs.push_back(Attributes::Stinky);
 
         viewers.push_back(new Viewer(this, ALICE, "Alice"));
-        viewers[4]->limits.push_back(Limit{Constraints::Introverted});
+        viewers[4]->limits.push_back(Limit{Constraints::Alone});
 
         closed_sections.push_back({0, 63});
         closed_sections.push_back({69, 71});
@@ -1429,15 +1529,18 @@ void Game::setupLevel() {
         viewers[3]->limits.push_back(Limit{Constraints::Love, 4});
         viewers[3]->limits.push_back(Limit{Constraints::Wheelchair});
 
-        viewers.push_back(new Viewer(this, JOSEPH, "Joseph"));
-        viewers[4]->limits.push_back(Limit{Constraints::Love, 3});
+        viewers.push_back(new Viewer(this, JOSEPH, "Joseph",
+            {},
+            {Limit{Constraints::Love, 3}},
+            Skins::TallSkin
+        ));
 
         closed_sections.push_back({0, 56});
         closed_sections.push_back({60, 64});
         closed_sections.push_back({68, 71});
     } else if (level_id == 7) {
         // Level 7
-        viewers.push_back(new Viewer(this, STANLEY, "MajGen.Stanley"));
+        viewers.push_back(new Viewer(this, STANLEY, "Maj.Stanley"));
         viewers[0]->limits.push_back(Limit{Constraints::Parent, 4});
 
         viewers.push_back(new Viewer(this, MABEL, "Mabel"));
@@ -1593,7 +1696,178 @@ void Game::setupLevel() {
         closed_sections.push_back({60, 63});
         closed_sections.push_back({68, 71});
     } else if (level_id == 12) {
-        // Level 13
+        // Level 12
+        // 10TIHAY
+        viewers.push_back(new Viewer(this, WALTER, "Walter"));
+        viewers[0]->limits.push_back(Limit{Constraints::StageLeft});
+        viewers[0]->limits.push_back(Limit{Constraints::See, 1});
+        viewers[0]->limits.push_back(Limit{Constraints::See, 2});
+        viewers[0]->limits.push_back(Limit{Constraints::Hate, 3});
+        viewers[0]->limits.push_back(Limit{Constraints::Misopedia});
+        viewers.push_back(new Viewer(this, BIANCA, "Bianca"));
+        viewers[1]->setSkin(Skins::ShortSkin);
+        viewers[1]->limits.push_back(Limit{Constraints::Date, 4});
+        viewers[1]->limits.push_back(Limit{Constraints::Misopedia});
+        viewers.push_back(new Viewer(this, KAT, "Kat"));
+        viewers[2]->setSkin(Skins::ShortSkin);
+        viewers[2]->limits.push_back(Limit{Constraints::Date, 3});
+        viewers[2]->limits.push_back(Limit{Constraints::Misopedia});
+        viewers.push_back(new Viewer(this, PATRICK, "Patrick"));
+        viewers[3]->setSkin(Skins::TallSkin);
+        viewers[3]->attrs.push_back(Attributes::Stinky);
+        viewers[3]->attrs.push_back(Attributes::Singing);
+        viewers[3]->limits.push_back(Limit{Constraints::Date, 2});
+        viewers[3]->limits.push_back(Limit{Constraints::Introverted});
+        viewers.push_back(new Viewer(this, CAMERON, "Cameron"));
+        viewers[4]->setSkin(Skins::ShortSkin);
+        viewers[4]->limits.push_back(Limit{Constraints::Date, 1});
+        // Ghost
+        viewers.push_back(new Viewer(this, MURGATROYD, "Murgatroyd"));
+        // Happy family
+        viewers.push_back(new Viewer(this, ROSEMARY, "Rosemary"));
+        viewers[6]->limits.push_back(Limit{Constraints::StageLeft});
+        viewers[6]->limits.push_back(Limit{Constraints::Parent, 1});
+        viewers[6]->limits.push_back(Limit{Constraints::Row, 2});
+        viewers[6]->limits.push_back(Limit{Constraints::Hate, 5});
+        viewers.push_back(new Viewer(this, WENDY, "Wendy"));
+        viewers[7]->setSkin(Skins::BabySkin, 6);
+        viewers[7]->limits.push_back(Limit{Constraints::GoodNose});
+        viewers[7]->limits.push_back(Limit{Constraints::Love, 8});
+        viewers.push_back(new Viewer(this, RUBY, "Ruby"));
+        viewers[8]->setSkin(Skins::BabySkin, -1);
+        viewers[8]->limits.push_back(Limit{Constraints::Love, 7});
+
+        closed_sections.push_back({0, 47});
+        closed_sections.push_back({52, 55});
+        closed_sections.push_back({60, 63});
+        closed_sections.push_back({68, 71});
+    } else if (level_id == 13) {
+        viewers.push_back(new Viewer(this, CHESSP, "Queen (P)",
+            {Attributes::Singing},
+            {
+                Limit{Constraints::Wheelchair},
+                Limit{Constraints::ChessProt, 1}
+            },
+            Skins::ChessQueenSkin
+        ));
+        viewers.push_back(new Viewer(this, CHESSP, "Bishop (P)",
+            {},
+            {
+                Limit{Constraints::BadEars},
+                Limit{Constraints::Aisle, 4}
+            },
+            Skins::ChessBishopSkin
+        ));
+        viewers.push_back(new Viewer(this, CHESSR, "Knight (R)",
+            {},
+            {
+                Limit{Constraints::GoodNose},
+                Limit{Constraints::Seat, 39}
+            },
+            Skins::ChessKnightSkin
+        ));
+        viewers.push_back(new Viewer(this, CHESSR, "Rook (R)",
+            {},
+            {Limit{Constraints::BadEars}},
+            Skins::ChessRookSkin
+        ));
+
+        viewers.push_back(new Viewer(this, KATE, "Kate",
+            {},
+            {Limit{Constraints::ChessHater}}
+        ));
+
+        viewers.push_back(new Viewer(this, JOSEPH, "Joseph",
+            {Attributes::Talkative},
+            {
+                Limit{Constraints::See, 6}
+            },
+            Skins::TallSkin
+        ));
+        viewers.push_back(new Viewer(this, HEBE, "Hebe",
+            {Attributes::Talkative},
+            {
+                Limit{Constraints::Wheelchair},
+                Limit{Constraints::ChessHater}
+            },
+            Skins::ShortSkin
+        ));
+
+        viewers.push_back(new Viewer(this, ALICE, "Alice",
+            {},
+            {
+                Limit{Constraints::Lonely},
+                Limit{Constraints::ChessHater}
+            }
+        ));
+
+        closed_sections.push_back({0, 36});
+        closed_sections.push_back({40, 53});
+        closed_sections.push_back({56, 57});
+        closed_sections.push_back({64, 65});
+    } else if (level_id == 14) {
+        // Level 14
+        viewers.push_back(new Viewer(this, JOSEPH, "Joseph",
+            {Attributes::Talkative},
+            {Limit{Constraints::See, 1}, Limit{Constraints::Prox, 7}},
+            Skins::TallSkin
+        ));
+        viewers.push_back(new Viewer(this, HEBE, "Hebe"));
+        viewers[1]->setSkin(Skins::ShortSkin);
+        viewers[1]->limits.push_back(Limit{Constraints::Wheelchair});
+        viewers[1]->attrs.push_back(Attributes::Talkative);
+
+        viewers.push_back(new Viewer(this, STANLEY, "Maj.Stanley"));
+        viewers[2]->attrs.push_back(Attributes::Talkative);
+        viewers[2]->limits.push_back(Limit{Constraints::GoodNose});
+        viewers.push_back(new Viewer(this, MABEL, "Mabel"));
+        viewers[3]->setSkin(Skins::BabySkin, 2);
+        viewers[3]->attrs.push_back(Attributes::Singing);
+        viewers[3]->limits.push_back(Limit{Constraints::Love, 10});
+        viewers.push_back(new Viewer(this, EDITH, "Edith"));
+        viewers[4]->setSkin(Skins::BabySkin, 2);
+        viewers[4]->limits.push_back(Limit{Constraints::BadEars});
+        viewers[4]->limits.push_back(Limit{Constraints::GoodNose});
+        viewers.push_back(new Viewer(this, KATE, "Kate"));
+        viewers[5]->setSkin(Skins::BabySkin, 2);
+        viewers[5]->limits.push_back(Limit{Constraints::GoodNose});
+        viewers.push_back(new Viewer(this, ISABEL, "Isabel"));
+        viewers[6]->setSkin(Skins::BabySkin, 2);
+        viewers[6]->limits.push_back(Limit{Constraints::Hate, 12});
+        viewers[6]->limits.push_back(Limit{Constraints::GoodNose});
+
+        viewers.push_back(new Viewer(this, RICHARD, "Richard"));
+        viewers[7]->setSkin(Skins::TallSkin);
+        viewers[7]->attrs.push_back(Attributes::Stinky);
+        viewers[7]->limits.push_back(Limit{Constraints::Friends, 1});
+        viewers[7]->limits.push_back(Limit{Constraints::Date, 8});
+        viewers[7]->limits.push_back(Limit{Constraints::Hate, 12});
+        viewers.push_back(new Viewer(this, SAMUEL, "Samuel"));
+        viewers[8]->setSkin(Skins::TallSkin);
+        viewers[8]->attrs.push_back(Attributes::Stinky);
+        viewers[8]->limits.push_back(Limit{Constraints::Friends, 1});
+        viewers[8]->limits.push_back(Limit{Constraints::Date, 7});
+        viewers.push_back(new Viewer(this, RUTH, "Ruth"));
+        viewers[9]->setSkin(Skins::ShortSkin);
+        viewers[9]->limits.push_back(Limit{Constraints::Friends, 1});
+        viewers.push_back(new Viewer(this, FREDERIC, "Frederic"));
+        viewers[10]->limits.push_back(Limit{Constraints::Friends, 1});
+        viewers[10]->attrs.push_back(Attributes::Stinky);
+        viewers[10]->limits.push_back(Limit{Constraints::Hate, 9});
+        viewers[10]->limits.push_back(Limit{Constraints::Love, 3});
+        viewers.push_back(new Viewer(this, JOE, "Joe"));
+        viewers[11]->attrs.push_back(Attributes::Stinky);
+        viewers[11]->limits.push_back(Limit{Constraints::Friends, 1});
+
+        viewers.push_back(new Viewer(this, MURGATROYD, "Murgatroyd"));
+
+        closed_sections.push_back({0, 39});
+        closed_sections.push_back({42, 47});
+        closed_sections.push_back({52, 55});
+        closed_sections.push_back({60, 63});
+        closed_sections.push_back({68, 71});
+    } else if (level_id == 15) {
+        // Level 17
         viewers.push_back(new Viewer(this, MAX, "Max"));
         viewers[0]->limits.push_back(Limit{Constraints::Group, 1});
         viewers.push_back(new Viewer(this, JULIA, "Julia"));
@@ -1640,10 +1914,49 @@ void Game::setupLevel() {
         closed_sections.push_back({52, 55});
         closed_sections.push_back({60, 63});
         closed_sections.push_back({68, 71});
+    } else if (level_id == 19) {
+        // Debug level
+        viewers.push_back(new Viewer(this, CHESSW, "CHESSW"));
+        viewers.push_back(new Viewer(this, CHESSP, "CHESSP"));
+        viewers.push_back(new Viewer(this, CHESSR, "CHESSR"));
+        // Good people
+        viewers.push_back(new Viewer(this, JULIA, "JULIA"));
+        viewers.push_back(new Viewer(this, DEE, "DEE"));
+        viewers.push_back(new Viewer(this, MAX, "MAX"));
+        viewers.push_back(new Viewer(this, JOE, "JOE"));
+        // Fake people
+        viewers.push_back(new Viewer(this, DAVENPORT, "DAVENPORT"));
+        viewers.push_back(new Viewer(this, ALICE, "ALICE"));
+        viewers.push_back(new Viewer(this, ROSEMARY, "ROSEMARY"));
+        viewers.push_back(new Viewer(this, WENDY, "WENDY"));
+        viewers.push_back(new Viewer(this, RUBY, "RUBY"));
+        // 10TIHAY
+        viewers.push_back(new Viewer(this, WALTER, "WALTER"));
+        viewers.push_back(new Viewer(this, KAT, "KAT"));
+        viewers.push_back(new Viewer(this, BIANCA, "BIANCA"));
+        viewers.push_back(new Viewer(this, PATRICK, "PATRICK"));
+        viewers.push_back(new Viewer(this, CAMERON, "CAMERON"));
+        // Pirates
+        viewers.push_back(new Viewer(this, RICHARD, "RICHARD"));
+        viewers.push_back(new Viewer(this, SAMUEL, "SAMUEL"));
+        viewers.push_back(new Viewer(this, JAMES, "JAMES"));
+        viewers.push_back(new Viewer(this, FREDERIC, "FREDERIC"));
+        viewers.push_back(new Viewer(this, STANLEY, "STANLEY"));
+        viewers.push_back(new Viewer(this, MABEL, "MABEL"));
+        viewers.push_back(new Viewer(this, EDITH, "EDITH"));
+        viewers.push_back(new Viewer(this, KATE, "KATE"));
+        viewers.push_back(new Viewer(this, ISABEL, "ISABEL"));
+        // Sailors
+        viewers.push_back(new Viewer(this, BUTTERCUP, "BUTTERCUP"));
+        viewers.push_back(new Viewer(this, HEBE, "HEBE"));
+        viewers.push_back(new Viewer(this, JOSEPH, "JOSEPH"));
+        // Ghosts
+        viewers.push_back(new Viewer(this, MURGATROYD, "MURGATROYD"));
+        viewers.push_back(new Viewer(this, RUTH, "RUTH"));
     }
 
-    setupLinks();
     printf("Level %i\n", level_id + 1);
+    setupLinks();
 }
 
 void Game::run() {
@@ -1696,6 +2009,12 @@ int main() {
     Game game = Game(window, renderer);
 #ifdef DEBUG_MODE
     game.debug_state = -1;
+#endif
+#ifdef DEBUG_LEVEL
+    while (game.level_id < DEBUG_LEVEL) {
+        game.setupLevel();
+        game.level_id++;
+    }
 #endif
     game.run();
 

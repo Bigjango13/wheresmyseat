@@ -14,7 +14,7 @@ A game I made for my best friend.
 - 11 levels
 - Ducks and chess pieces only
 
-2026-01-22: QoL
+2026-01-22:
 - 2 new levels
 - "Julia" no long wants to sit with "Max" in level 2
 - 5'3 is no longer short, 5'2 is
@@ -30,3 +30,11 @@ A game I made for my best friend.
 - You can now shift click ducks out of seats
 - Ducks with the "Seat" constraints can be shift-click into their sear
 - Other minor tweaks (level, duck colors)
+
+2026-01-23:
+- 3 new level
+- Add "Walter", "Bianca", "Kat", "Patrick", "Cameron", and "Ruth"
+- Add "Misopedia", "See", and "Introverted" constraints
+- Add green outlines for "Date", "Love", "Prox", and "ChessProtect" constraints
+- Add red outlines for the "Hate" constraints
+- The "next" button highlights unhappy viewers

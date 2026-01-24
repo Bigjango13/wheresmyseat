@@ -67,9 +67,11 @@ enum class Constraints {
     Date,
     Hate,
     Prox,
+    See,
 
-    Introverted,
+    Alone,
     Lonely,
+    Introverted,
     Extroverted,
 
     Chess,
@@ -86,6 +88,7 @@ enum class Constraints {
 
     Parent,
     Baby,
+    Misopedia,
 
     Wheelchair,
 
@@ -168,7 +171,11 @@ public:
         }
     }
 
-    Viewer(Game *game, int color, std::string name);
+    Viewer(
+        Game *game, int color, std::string name,
+        std::vector<Attributes> attrs = {}, std::vector<Limit> limits = {},
+        Skins dskin = Skins::NormalSkin
+    );
 
     bool render();
     bool check_valid(std::vector<Viewer*> &viewers);
